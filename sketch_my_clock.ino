@@ -1,4 +1,3 @@
-//https://wttr.in/?m&lang=en&format=%25C%5CnTemperature%3A+%25t%5CnWind%3A+%25w%5CnPressure%3A+%25P
 #include <ESP8266WiFi.h>
 #include <WiFiClient.h>
 #include <ESP8266HTTPClient.h>
@@ -21,19 +20,17 @@ HTTPClient httpClient;
 LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 //Normal vars
-String tempStr;
-short httpResponseCode;
-StaticJsonDocument<1024> jsonDocument;
-DeserializationError jsonDeserializationError;
 unsigned long startMillisTime;
 unsigned long beforeMillisTime = 0;
 time_t startTimestamp;
 time_t nowTimestamp;
+tm* now;
 bool isButtonPressed;
 bool wasButtonPressed = false;
 uint8_t currentScreen = 0;
-char formattedTimeUpperRow[8];
-char formattedTimeBottomRow[10];
+char clockScreenSecondRow[8];
+char clockScreenThirdRow[10];
+char clockScreenFourthRow[20];
 
 void error(String msg){ // Error handling
   Serial.println("Error message:");
@@ -51,12 +48,13 @@ void error(String msg){ // Error handling
 void updateTime() {  //Update the startTimestamp and startMillisTime variables
   httpClient.begin(wifiClient, "http://www.worldtimeapi.org:80/api/ip");
 
-  httpResponseCode = httpClient.GET();
+  short httpResponseCode = httpClient.GET();
 
   if (httpResponseCode > 199 && httpResponseCode < 300) {
-    jsonDeserializationError = deserializeJson(jsonDocument, httpClient.getString());
+    StaticJsonDocument<1024> jsonDocument;
+    DeserializationError jsonDeserializationError = deserializeJson(jsonDocument, httpClient.getString());
     if (jsonDeserializationError) {
-      tempStr="Parsing worldtimeapi json failed: ";
+      String tempStr="Parsing worldtimeapi json failed: ";
       tempStr+=jsonDeserializationError.c_str();
       error(tempStr);
     } else if (jsonDocument.containsKey("unixtime")) {
@@ -66,7 +64,7 @@ void updateTime() {  //Update the startTimestamp and startMillisTime variables
       error("Couldn't get the unixtime key from worldtimeapi json data!");
     }
   } else {
-    tempStr="Recieved an invalid response code from worldtimeapi: ";
+    String tempStr="Recieved an invalid response code from worldtimeapi: ";
     tempStr+=httpResponseCode;
     error(tempStr);
   }
@@ -108,7 +106,7 @@ void setup() {
   startMillisTime = millis();
   while (WiFi.status() != WL_CONNECTED) {
     if (millis() - startMillisTime > 10000) {
-      tempStr="The connection to wifi timed out! Wifi status code: ";
+      String tempStr="The connection to wifi timed out! Wifi status code: ";
       tempStr+=WiFi.status();
       error(tempStr);
     }
@@ -131,31 +129,47 @@ void loop() {
   }
   beforeMillisTime = millis();
 
-  //Input handling
+  //Input
   if (digitalRead(D0) == LOW) {
     isButtonPressed = true;
   } else {
     isButtonPressed = false;
   }
+
   if (isButtonPressed && !wasButtonPressed) {
     currentScreen++;
-    if(currentScreen==5){
+    if(currentScreen==4){
       currentScreen=0;
     }
     lcd.clear();
   }
+
   wasButtonPressed = isButtonPressed;
 
   // THE SCREENS
   if (currentScreen == 0) {  // The clock screen
     nowTimestamp = startTimestamp + ((millis() - startMillisTime) / 1000);
-    strftime(&formattedTimeUpperRow[0], 9, "%H:%M:%S", localtime(&nowTimestamp));
+    now = localtime(&nowTimestamp);
+
+    //1st row
+    //(days until vacation in "UNTIL VAC D:X H:X" format)
+
+    //2nd row
+    strftime(&clockScreenSecondRow[0], 9, "%H:%M:%S", now);
     lcd.setCursor(6,1);
-    lcd.print(formattedTimeUpperRow);
-    strftime(&formattedTimeBottomRow[0], 11, "%d/%m/%Y", localtime(&nowTimestamp));
+    lcd.print(clockScreenSecondRow);
+
+    //3rd row
+    strftime(&clockScreenThirdRow[0], 11, "%d/%m/%Y", now);
     lcd.setCursor(5,2);
-    lcd.print(formattedTimeBottomRow);
-  } else if (currentScreen == 1) {  // The weather screen
+    lcd.print(clockScreenThirdRow);
+
+    //4th row
+    clockScreenFourthRow[0]=' ';clockScreenFourthRow[1]=' ';clockScreenFourthRow[2]=' ';clockScreenFourthRow[3]=' ';clockScreenFourthRow[4]=' ';clockScreenFourthRow[5]=' ';clockScreenFourthRow[6]=' ';clockScreenFourthRow[7]=' ';clockScreenFourthRow[8]=' ';clockScreenFourthRow[9]=' ';clockScreenFourthRow[10]=' ';clockScreenFourthRow[11]=' ';clockScreenFourthRow[12]=' ';clockScreenFourthRow[13]=' ';clockScreenFourthRow[14]=' ';clockScreenFourthRow[15]=' ';clockScreenFourthRow[16]=' ';clockScreenFourthRow[17]=' ';clockScreenFourthRow[18]=' ';clockScreenFourthRow[19]=' ';
+    lcd.setCursor((20-strftime(&clockScreenFourthRow[0], 21, "%A, %B", now))/2,3);
+    lcd.print(clockScreenFourthRow);
+
+  } else if (currentScreen == 1) {  // The weather screen, https://wttr.in/?m&lang=en&format=%25C%5CnTemperature%3A+%25t%5CnWind%3A+%25w%5CnPressure%3A+%25P
     lcd.setCursor(0,0);
     lcd.print("WEATHER INFO");
   } else if (currentScreen == 2) {  // The car game screen
@@ -164,8 +178,5 @@ void loop() {
   } else if (currentScreen == 3) {  // The minesweeper screen
     lcd.setCursor(0,0);
     lcd.print("MINESWEEEEEPIE");
-  } else if (currentScreen == 4) {  // Days until vacation screen
-    lcd.setCursor(0,0);
-    lcd.print("INF DAYS TIL VACATION");
   }
 }
