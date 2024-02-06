@@ -124,7 +124,6 @@ void loop() {
     }
     wasButtonPressed = isButtonPressed;
 
-    Serial.println("ben");
     switch (currentScreen) {
         case 0:
             {
